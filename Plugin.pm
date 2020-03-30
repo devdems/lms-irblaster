@@ -238,6 +238,9 @@ sub initPlugin {
 	# Install callback to get client power state, volume and connect/disconnect changes
 	Slim::Control::Request::subscribe( \&commandCallback, [['power', 'play', 'playlist', 'pause', 'client']]);
 	
+	# Subscribe to alarms
+    	Slim::Control::Request::subscribe( \&alarmCallback, [['alarm'],['sound', 'end', 'snooze', 'snooze_end']]);
+	
 	# Reroute all mixer volume requests
 	$gOrigVolCmdFuncRef = Slim::Control::Request::addDispatch( ['mixer', 'volume', '_newvalue'], [1, 0, 0, \&myMixerVolumeCommand]);
 
@@ -268,6 +271,8 @@ sub initPlugin {
 sub shutdownPlugin {
 
 	Slim::Control::Request::unsubscribe( \&commandCallback);
+	
+	Slim::Control::Request::unsubscribe( \&alarmCallback);
 	
 	# Give up rerouting
 	Slim::Control::Request::addDispatch( ['mixer', 'volume', '_newvalue'], [1, 0, 0, $gOrigVolCmdFuncRef]);
@@ -1395,6 +1400,28 @@ sub commandCallback {
 
 		reInitializePlayer( $client);
 	}
+}
+
+sub alarmCallback {
+	my $request = shift;
+
+	my $client = $request->client();
+
+	$log->debug( "*** IR-Blaster: alarmCallback() p0: " . $request->{'_request'}[0] . "\n");
+	$log->debug( "*** IR-Blaster: alarmCallback() p1: " . $request->{'_request'}[1] . "\n");
+	
+	# IRBlaster works with: SB2/3, Transporter and Fab4
+	if( !defined( $client) || !( ( $client->model() eq 'squeezebox2') || ( $client->model() eq 'transporter') || ( $client->model() eq 'fab4'))) {
+		return;
+	}
+
+	# Get power on and off commands
+	# Sometimes we do get only a power command, sometimes only a play/pause command and sometimes both
+	if( $request->isCommand([['alarm'],['end']])	) {
+	    $log->debug( "*** IR-Blaster: alarmCallback() (alarm end)");
+		handlePowerOnOff( $client, '0');
+	}
+		
 }
 
 # ----------------------------------------------------------------------------
